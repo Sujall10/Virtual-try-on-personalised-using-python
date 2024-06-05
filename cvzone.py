@@ -1,6 +1,7 @@
 import cv2
 import mediapipe as mp
 import time
+import numpy as np
 
 class FaceDetector():
     def __init__(self, minDetectionCon=0.5):
@@ -15,108 +16,88 @@ class FaceDetector():
         self.results = self.faceMesh.process(imgRGB)
         ih, iw, ic = img.shape
         bboxs = []
-        landmark_coords = []
-        eyebrow_coords = []
+        landmarks = []
         if self.results.multi_face_landmarks:
             for faceLms in self.results.multi_face_landmarks:
-                # Get coordinates for specific landmarks
-                landmark_33 = faceLms.landmark[33]
-                x_33 = int(landmark_33.x * iw)
-                y_33 = int(landmark_33.y * ih)
-                landmark_coords.append((x_33, y_33))
+                for id, lm in enumerate(faceLms.landmark):
+                    x = int(lm.x * iw)
+                    y = int(lm.y * ih)
+                    landmarks.append((x, y))
+                    if draw:
+                        cv2.circle(img, (x, y), 2, (0, 255, 0), cv2.FILLED)
+                        cv2.putText(img, str(id), (x, y), cv2.FONT_HERSHEY_PLAIN, 0.5, (255, 0, 0), 1)
 
-                landmark_27 = faceLms.landmark[27]
-                x_27 = int(landmark_27.x * iw)
-                y_27 = int(landmark_27.y * ih)
-                landmark_coords.append((x_27, y_27))
-
-                landmark_133 = faceLms.landmark[133]
-                x_133 = int(landmark_133.x * iw)
-                y_133 = int(landmark_133.y * ih)
-                landmark_coords.append((x_133, y_133))
-
-                landmark_362 = faceLms.landmark[362]
-                x_362 = int(landmark_362.x * iw)
-                y_362 = int(landmark_362.y * ih)
-                landmark_coords.append((x_362, y_362))
-
-                landmark_263 = faceLms.landmark[263]
-                x_263 = int(landmark_263.x * iw)
-                y_263 = int(landmark_263.y * ih)
-                landmark_coords.append((x_263, y_263))
-
-                # Collecting coordinates for both eyes
-                eye_coords = []
-                for id in [33, 133, 362, 263]:  # Right eye (33, 133) and left eye (362, 263)
-                    x = int(faceLms.landmark[id].x * iw)
-                    y = int(faceLms.landmark[id].y * ih)
-                    eye_coords.append((x, y))
-
-                # Calculate bounding box around the eyes
-                x_min = min(eye_coords, key=lambda p: p[0])[0]
-                y_min = min(eye_coords, key=lambda p: p[1])[1]
-                x_max = max(eye_coords, key=lambda p: p[0])[0]
-                y_max = max(eye_coords, key=lambda p: p[1])[1]
+                x_min = min([int(lm.x * iw) for lm in faceLms.landmark])
+                y_min = min([int(lm.y * ih) for lm in faceLms.landmark])
+                x_max = max([int(lm.x * iw) for lm in faceLms.landmark])
+                y_max = max([int(lm.y * ih) for lm in faceLms.landmark])
                 bbox = (x_min, y_min, x_max - x_min, y_max - y_min)
                 bboxs.append(bbox)
 
                 if draw:
                     img = self.fancyDraw(img, bbox)
-
-                # Optionally draw the specific landmark points on the image
-                if draw:
-                    cv2.circle(img, (x_33, y_33), 5, (0, 255, 0), cv2.FILLED)
-                    cv2.circle(img, (x_27, y_27), 5, (0, 255, 0), cv2.FILLED)
-                    cv2.circle(img, (x_133, y_133), 5, (0, 255, 0), cv2.FILLED)
-                    cv2.circle(img, (x_263, y_263), 5, (0, 255, 0), cv2.FILLED)
-                    cv2.circle(img, (x_362, y_362), 5, (0, 255, 0), cv2.FILLED)
-
-                eyebrow_points = [70, 105, 110, 336, 334]
-                eyebrow_landmarks = []
-                for id in eyebrow_points:
-                    x = int(faceLms.landmark[id].x * iw)
-                    y = int(faceLms.landmark[id].y * ih)
-                    eyebrow_landmarks.append((x, y))
-                
-                eyebrow_coords.append(eyebrow_landmarks)
-
-                # Optionally draw circles on these eyebrow landmark points
-                if draw:
-                    for (x, y) in eyebrow_landmarks:
-                        cv2.circle(img, (x, y), 5, (0, 255, 0), cv2.FILLED)
-        return img, bboxs, landmark_coords
+        return img, bboxs, landmarks
 
     def fancyDraw(self, img, bbox, l=30, t=5, rt=1):
         x, y, w, h = bbox
         x1, y1 = x + w, y + h
 
         cv2.rectangle(img, bbox, (255, 0, 255), rt)
-        # Top Left  x, y
         cv2.line(img, (x, y), (x + l, y), (255, 0, 255), t)
         cv2.line(img, (x, y), (x, y + l), (255, 0, 255), t)
-        # Top Right  x1, y
         cv2.line(img, (x1, y), (x1 - l, y), (255, 0, 255), t)
         cv2.line(img, (x1, y), (x1, y + l), (255, 0, 255), t)
-        # Bottom Left  x, y1
         cv2.line(img, (x, y1), (x + l, y1), (255, 0, 255), t)
         cv2.line(img, (x, y1), (x, y1 - l), (255, 0, 255), t)
-        # Bottom Right  x1, y1
         cv2.line(img, (x1, y1), (x1 - l, y1), (255, 0, 255), t)
         cv2.line(img, (x1, y1), (x1, y1 - l), (255, 0, 255), t)
         return img
 
+def overlay_image(background, overlay, x, y, overlay_size=None):
+    bg_h, bg_w, bg_channels = background.shape
+    if overlay_size is not None:
+        overlay = cv2.resize(overlay, overlay_size)
+
+    h, w, _ = overlay.shape
+    rows, cols = h, w
+
+    if x + w > bg_w or y + h > bg_h:
+        return background
+
+    overlay_img = overlay[:, :, :3]
+    mask = overlay[:, :, 3:]
+
+    background_part = background[y:y+rows, x:x+cols]
+
+    mask_inv = cv2.bitwise_not(mask)
+    img_bg = cv2.bitwise_and(background_part, background_part, mask=mask_inv)
+    img_fg = cv2.bitwise_and(overlay_img, overlay_img, mask=mask)
+
+    dst = cv2.add(img_bg, img_fg)
+    background[y:y+rows, x:x+cols] = dst
+
+    return background
 
 def main():
     cap = cv2.VideoCapture(0)
     pTime = 0
     detector = FaceDetector()
+    glasses_img = cv2.imread('glasses/glass4.png', cv2.IMREAD_UNCHANGED) # Make sure the image has an alpha channel (RGBA)
+
     while True:
         success, img = cap.read()
         if not success:
             break
-        img, bboxs, landmark_coords = detector.findFaces(img)
-        print("Bounding Boxes:", bboxs)
-        print("Landmark Coordinates:", landmark_coords)
+
+        img, bboxs, landmarks = detector.findFaces(img)
+
+        if landmarks:
+            left_eye_point = landmarks[63]
+            right_eye_point = landmarks[298]
+            eye_center = ((left_eye_point[0] + right_eye_point[0]) // 2, (left_eye_point[1] + right_eye_point[1]) // 2)
+            glasses_width = int(1.5 *abs(right_eye_point[0] - left_eye_point[0]))
+            glasses_height = int(glasses_width * glasses_img.shape[0] / glasses_img.shape[1])
+            img = overlay_image(img, glasses_img, eye_center[0] - glasses_width // 2, eye_center[1] - glasses_height // 2, (glasses_width, glasses_height))
 
         cTime = time.time()
         fps = 1 / (cTime - pTime)

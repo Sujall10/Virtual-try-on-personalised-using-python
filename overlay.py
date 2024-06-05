@@ -1,4 +1,7 @@
 import cv2
+import numpy as np
+from cvzone import *
+import cv2
 import mediapipe as mp
 import time
 
@@ -67,6 +70,33 @@ class FaceDetector():
         return img
 
 
+
+
+def overlay_image(main_img, overlay_img, x, y):
+    """
+    Overlays `overlay_img` onto `main_img` at position `(x, y)`.
+    """
+    # Get the height and width of the overlay image
+    overlay_height, overlay_width, _ = overlay_img.shape
+
+    # Define the ROI (Region of Interest) on the main image to place the overlay
+    roi = main_img[y:y+overlay_height, x:x+overlay_width]
+
+    # Create a mask of the overlay image
+    overlay_img_gray = cv2.cvtColor(overlay_img, cv2.COLOR_BGR2GRAY)
+    ret, mask = cv2.threshold(overlay_img_gray, 10, 255, cv2.THRESH_BINARY)
+    mask_inv = cv2.bitwise_not(mask)
+
+    # Create masked regions
+    main_img_bg = cv2.bitwise_and(roi, roi, mask=mask_inv)
+    overlay_img_fg = cv2.bitwise_and(overlay_img, overlay_img, mask=mask)
+
+    # Combine the two images
+    dst = cv2.add(main_img_bg, overlay_img_fg)
+    main_img[y:y+overlay_height, x:x+overlay_width] = dst
+
+    return main_img
+
 def main():
     cap = cv2.VideoCapture(0)
     pTime = 0
@@ -83,12 +113,56 @@ def main():
         fps = 1 / (cTime - pTime)
         pTime = cTime
         cv2.putText(img, f'FPS: {int(fps)}', (20, 70), cv2.FONT_HERSHEY_PLAIN, 3, (0, 255, 0), 2)
-        cv2.imshow("Image", img)
+        imgg = cv2.imshow("Image", img)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
     cap.release()
     cv2.destroyAllWindows()
 
-if __name__ == "__main__":
-    main()
+# Example usage
+if __name__ == '__main__':
+    # Load main image and overlay image
+    cap = cv2.VideoCapture(0)
+    pTime = 0
+    detector = FaceDetector()
+    while True:
+        success, img = cap.read()
+        if not success:
+            break
+        img, bboxs, landmark_coords = detector.findFaces(img)
+        print("Bounding Boxes:", bboxs)
+        print("Landmark 23 Coordinates:", landmark_coords)
+
+        cTime = time.time()
+        fps = 1 / (cTime - pTime)
+        pTime = cTime
+        cv2.putText(img, f'FPS: {int(fps)}', (20, 70), cv2.FONT_HERSHEY_PLAIN, 3, (0, 255, 0), 2)
+        imgg = cv2.imshow("Image", img)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+    main_img = img
+    cap = cv2.VideoCapture(0)
+    pTime = 0
+    detector = FaceDetector()
+    # glasses_img = cv2.imread('glasses/glass3.png', cv2.IMREAD_UNCHANGED) # Make sure the image has an alpha channel (RGBA)
+    while True:
+        success, img1 = cap.read()
+        if not success:
+            break
+    overlay_img = cv2.imread('glasses/glass11.png', -1)  # -1 loads with alpha channel if present
+
+    # Example coordinates (you would replace these with your actual landmarks or annotations)
+    x = 308
+    y = 307
+
+    # Overlay the image
+    result_img = overlay_image(img, overlay_img, x, y)
+
+    # Display the result
+    cv2.imshow('Overlay Result', result_img)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
