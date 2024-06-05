@@ -12,7 +12,7 @@ while webcam.isOpened():
     img, faces = detector.findFaceMesh(img, draw=True)
      # Check if any faces are detected
     if faces:
-        # print(faces[3][0:2])
+        print(faces)
         image = cv2.imread('glasses/glass3.png',cv2.IMREAD_UNCHANGED)
         img = cvzone.overlayPNG(img,image,(1,5))
         # Loop through each detected face
